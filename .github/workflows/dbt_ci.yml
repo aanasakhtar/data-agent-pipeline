@@ -1,0 +1,48 @@
+name: dbt CI
+
+# Concrete stand-in for workflow.md's Phase 4.5 (read-only dry-run validation) and
+# Phase 5.5 (post-build validation): every PR touching the dbt project must build
+# and pass all tests against an isolated Snowflake CI schema before it can merge.
+# Once a remote exists, add a branch protection rule on `main` requiring this
+# check to pass -- that rule is the practical Plan Approval Gate.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'dbt/**'
+      - '.github/workflows/dbt_ci.yml'
+
+defaults:
+  run:
+    working-directory: dbt/customer_platform
+
+jobs:
+  dbt-build:
+    runs-on: ubuntu-latest
+    env:
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+      SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+      SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+      SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+      SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+      SNOWFLAKE_SCHEMA_CI: CI
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dbt
+        run: pip install dbt-snowflake==1.8.4
+
+      - name: dbt deps
+        run: dbt deps
+
+      - name: dbt debug
+        run: dbt debug --target ci
+
+      - name: dbt build
+        run: dbt build --target ci

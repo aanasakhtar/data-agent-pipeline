@@ -1,0 +1,21 @@
+{
+  "opportunity_id": "order-fulfillment-ai-assessment",
+  "linked_metric_gaps": ["order_straight_through_rate:1"],
+  "linked_diagnostics": ["exception_concentration_plan_tier"],
+  "process_step": "post-order-completion support",
+  "observed_problem": "Overall straight-through rate is 90.47% (965 completed orders, 873 without a linked ticket). The one segment difference found (pro tier 4.3 points below enterprise) is explicitly flagged as low-confidence/likely-noise by L7, not a real operational pattern.",
+  "evidence_ids": ["order_straight_through_rate_20260918T161600Z"],
+  "task_characteristics": {
+    "repeatability": 3, "data_availability": 1, "determinism": 1,
+    "exception_rate": 2, "judgment_intensity": 3, "error_consequence": 2,
+    "workflow_integration": 2, "governance_sensitivity": 1
+  },
+  "ai_fit": "NO_AI_RECOMMENDATION",
+  "readiness": "not applicable -- there is no verified operational gap to address. The overall rate (90.47%) has no customer-stated target to compare against, and the one segment difference found is diagnosed as likely noise, not a real pattern.",
+  "risk_profile": "n/a",
+  "autonomy_level": "n/a",
+  "expected_kpi_impact": "n/a -- no baseline gap has been established with confidence",
+  "dependencies": ["a real target value from the customer (unresolved in L4)", "a diagnostic with causal_status other than hypothesis/low-confidence before any AI intervention would be justified"],
+  "human_control_points": ["n/a"],
+  "recommendation_confidence": "high confidence in the NO_AI_RECOMMENDATION call itself -- this is the correct outcome given the evidence, not a placeholder"
+}

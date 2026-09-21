@@ -1,0 +1,14 @@
+{
+  "diagnostic_id": "process_variant_analysis_order_lifecycle",
+  "category": "process_variant_discovery",
+  "method": "Object-centric case-trace analysis: each completed order + its linked ticket lifecycle (if any) classified into a discovered process variant, following the pattern in Celonis's Process Intelligence Graph / object-centric process mining (see docs/deep-research-ai-adoption-gaps.md). This replaces a flat rate/segment breakdown with an actual discovered process-variant distribution.",
+  "observation": "965 completed orders decompose into 5 discovered variants: V1_straight_through 873 orders (90.09%, no ticket); V2_resolved_well 45 orders (4.64%, ticket closed with CSAT>=4, avg resolution 2,671 hours); V4_unresolved_risk 40 orders (4.13%, ticket still open/in_progress against a COMPLETED order); V3_resolved_poorly 6 orders (0.62%, ticket closed with CSAT<3, avg resolution 8,833 hours); V2b_resolved_neutral 5 orders (0.52%, avg resolution 11,359 hours).",
+  "interpretation": "TWO OBSERVED (not hypothesis) findings worth acting on, unlike the earlier plan_tier segment diagnostic which was noise: (1) V4_unresolved_risk -- 40 orders (4.13% of completed orders) have an OPEN or IN_PROGRESS ticket against an order already marked 'completed'. This is a real, measurable process gap: orders are being marked complete while a customer issue is still unresolved. (2) V2b_resolved_neutral and V3_resolved_poorly show average resolution times of 11,359 and 8,833 HOURS respectively (470/368 days) -- suspiciously long even for a synthetic dataset, flagged as a likely DATA GENERATION ARTIFACT (generate_data.py draws resolved_at uniformly between ticket creation and 'now', which produces occasional multi-year gaps for early-created tickets) rather than a real operational pattern. Both conclusions are stated with their basis, not asserted as fact.",
+  "evidence_ids": ["order_straight_through_rate_20260918T161600Z"],
+  "source_queries": ["case-trace query joining gold.fct_orders + gold.fct_support_tickets, classified by ticket_status/csat_score, see docs/deep-research-ai-adoption-gaps.md for the exact SQL"],
+  "affected_process_steps": ["order completion gating", "ticket resolution SLA"],
+  "affected_segments": ["V4_unresolved_risk: 40 orders, order_status=completed with ticket_status in (open, in_progress)"],
+  "severity": "medium",
+  "confidence": "high on the V4 count itself (directly measured, no hypothesis); low on the two long-resolution variants being a real signal vs. a synthetic-data artifact",
+  "causal_status": "observed"
+}

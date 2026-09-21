@@ -1,0 +1,7 @@
+{
+  "framework_id": "ap-stp-analogy",
+  "name": "Accounts Payable Straight-Through Processing (analogy only)",
+  "role": "Conceptual template for defining an order-fulfillment straight-through metric",
+  "source": "CLaiMB_Data_Agent_Full_Multilayered_Architecture.md, section 11 (worked AP example)",
+  "note": "This is NOT a real external framework citation (not APQC PCF, SCOR DS, or ISO 22400 -- none of those are loaded in this registry). It only records that order_straight_through_rate borrows AP-STP's numerator/denominator pattern (successful completion without manual/exception touch). Do not cite this as an authoritative external benchmark."
+}

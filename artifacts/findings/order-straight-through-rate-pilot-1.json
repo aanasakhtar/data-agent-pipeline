@@ -1,0 +1,23 @@
+{
+  "finding_id": "order-straight-through-rate-pilot-1",
+  "headline": "90.47% of completed orders (873 of 965) required no support ticket; no verified operational gap or segment pattern was found strong enough to justify an AI recommendation.",
+  "severity": "low",
+  "verified_metrics": ["straight_through_rate = 0.9047 (evidence_id: order_straight_through_rate_20260918T161600Z)"],
+  "linked_evidence": ["order_straight_through_rate_20260918T161600Z"],
+  "diagnosis": ["exception_concentration_plan_tier (causal_status: hypothesis, confidence: low)"],
+  "benchmark_context": "plan_tier_pro_cohort -- suppressed, comparability check failed (plan tiers not confirmed operationally comparable)",
+  "ai_opportunity": "order-fulfillment-ai-assessment -- NO_AI_RECOMMENDATION (no verified gap to address)",
+  "advisory_match": "not applicable -- registry/advisory_catalog/ is empty in this pilot",
+  "verification_status": "PASS",
+  "confidence": "HIGH on the measured rate itself; LOW on any segment-driven explanation or recommendation",
+  "provenance_chain": [
+    "artifacts/business_context/order-fulfillment.json",
+    "registry/metric_registry/order_straight_through_rate.json",
+    "artifacts/evidence/order_straight_through_rate_20260918T161600Z.json",
+    "artifacts/diagnostics/exception_concentration_plan_tier.json",
+    "artifacts/ai_opportunities/order-fulfillment-ai-assessment.json",
+    "artifacts/benchmarks/plan_tier_pro_cohort.json",
+    "artifacts/verification/order_straight_through_rate_v1_verify.json",
+    "artifacts/findings/order-straight-through-rate-pilot-1.json (this file)"
+  ]
+}

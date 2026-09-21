@@ -1,0 +1,20 @@
+version: 2
+
+models:
+  - name: customer_360
+    description: >
+      Grain -- one row per customer. Lifetime value, order behavior, support load,
+      and a simple churn-risk flag. Consumed directly by the dashboard.
+    columns:
+      - name: customer_id
+        tests: [not_null, unique]
+      - name: is_churn_risk
+        tests: [not_null]
+
+  - name: weekly_business_metrics
+    description: >
+      Grain -- one row per week (2022-01-01 through the synthetic_data_as_of var).
+      Revenue, new customers, order count, ticket volume, and average CSAT.
+    columns:
+      - name: week_start_date
+        tests: [not_null, unique]

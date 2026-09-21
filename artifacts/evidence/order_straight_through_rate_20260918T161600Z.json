@@ -1,0 +1,32 @@
+{
+  "evidence_id": "order_straight_through_rate_20260918T161600Z",
+  "metric_contract_id": "order_straight_through_rate:1",
+  "observed_value": 0.9047,
+  "period": "2022-01-01 to 2026-09-08",
+  "sample_size": 965,
+  "distribution_summary": {
+    "by_plan_tier": {
+      "enterprise": {"completed_orders": 93, "straight_through_rate": 0.9355},
+      "free": {"completed_orders": 603, "straight_through_rate": 0.9055},
+      "pro": {"completed_orders": 269, "straight_through_rate": 0.8922}
+    }
+  },
+  "trend_summary": "not computed in this run -- single-period snapshot over the full window",
+  "segment_results": [
+    {"plan_tier": "enterprise", "completed_orders": 93, "straight_through_rate": 0.9355},
+    {"plan_tier": "free", "completed_orders": 603, "straight_through_rate": 0.9055},
+    {"plan_tier": "pro", "completed_orders": 269, "straight_through_rate": 0.8922}
+  ],
+  "source_objects": ["gold.fct_orders", "gold.fct_support_tickets", "gold.dim_customers"],
+  "query": "select count(distinct o.order_id) as completed_orders, count(distinct o.order_id) filter (where t.order_id is null) as no_ticket_orders, round(count(distinct o.order_id) filter (where t.order_id is null) * 1.0 / count(distinct o.order_id), 4) as straight_through_rate from gold.fct_orders o left join gold.fct_support_tickets t on o.order_id = t.order_id where o.order_status = 'completed'",
+  "query_hash": "3c4c8ceb12f28cea14940e1e99aef0ceee4b45ed8817f472bb7519092884842a",
+  "execution_timestamp": "2026-09-18T16:16:00Z",
+  "data_quality_status": "HIGH",
+  "freshness_status": "current -- ran directly against the same dbt build used for L1-L3 (dbt build --target local, 2026-09-18T16:16:23Z, 72/72 tests PASS)",
+  "source_coverage": "100% -- all 2000 orders in gold.fct_orders considered; 965 met the completed-status filter",
+  "caveats": [
+    "965 >= minimum_sample_guidance of 50, so overall rate qualifies as HIGH confidence",
+    "pro-tier segment (269 orders) and enterprise-tier segment (93 orders) both individually clear the 50-order guidance too"
+  ],
+  "provenance_chain": ["MetricContract order_straight_through_rate v1", "artifacts/gold/manifest.json"]
+}

@@ -1,0 +1,62 @@
+# Semantic model — one shared source of truth for business meaning.
+#
+# Borrowed from Wren AI's MDL (Modeling Definition Language): "encode your
+# domain knowledge once... define high-level concepts and map them to
+# underlying tables/columns, standardize metrics and the dimensions that
+# slice them." See docs/competitive-landscape.md.
+#
+# Before this file: kpi-metric-resolution hardcoded gold_fields/SQL directly
+# in each MetricContract, and evidence-current-state re-derived joins by
+# hand. Now: every layer (L4-L11) resolves business terms through THIS file,
+# never by inventing a join against raw table names itself. This is also
+# the discipline Palantir's Ontology enforces (agents traverse
+# ontology-exposed objects/links, never raw tables directly) -- see
+# registry/ontology_objects.yml for the object/link graph this model exposes.
+
+models:
+  Customer:
+    physical: gold.dim_customers
+    primary_key: customer_id
+    fields:
+      customer_id: {physical: customer_id, type: int}
+      plan_tier: {physical: plan_tier, type: string, values: [free, pro, enterprise]}
+      customer_status: {physical: customer_status, type: string, values: [active, churned]}
+      country: {physical: country, type: string}
+      signup_date: {physical: signup_date, type: date}
+
+  Order:
+    physical: gold.fct_orders
+    primary_key: order_id
+    fields:
+      order_id: {physical: order_id, type: int}
+      customer_id: {physical: customer_id, type: int}
+      order_status: {physical: order_status, type: string, values: [pending, completed, cancelled, refunded]}
+      order_date: {physical: order_date, type: timestamp}
+      order_total: {physical: order_total, type: decimal}
+    relationships:
+      belongs_to_customer: {to: Customer, via: customer_id}
+
+  SupportTicket:
+    physical: gold.fct_support_tickets
+    primary_key: ticket_id
+    fields:
+      ticket_id: {physical: ticket_id, type: int}
+      customer_id: {physical: customer_id, type: int}
+      order_id: {physical: order_id, type: int, nullable: true}
+      priority: {physical: priority, type: string, values: [low, medium, high]}
+      ticket_status: {physical: ticket_status, type: string, values: [open, in_progress, closed]}
+      csat_score: {physical: csat_score, type: int, nullable: true}
+    relationships:
+      belongs_to_customer: {to: Customer, via: customer_id}
+      linked_to_order: {to: Order, via: order_id, nullable: true}
+
+# Reusable metrics -- standardized once, referenced by id everywhere else
+# instead of being re-derived ad hoc per MetricContract.
+metrics:
+  order_straight_through_rate:
+    description: Share of completed orders with zero linked support tickets
+    grain: Order (filtered to order_status = completed)
+    numerator: count of Order where order_status = completed and no linked SupportTicket
+    denominator: count of Order where order_status = completed
+    direction: higher_is_better
+    dimensions: [Customer.plan_tier, Customer.country]

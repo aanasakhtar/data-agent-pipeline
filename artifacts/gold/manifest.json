@@ -1,0 +1,15 @@
+{
+  "gold_canonical_events": ["fct_orders (2000 rows)", "fct_support_tickets (500 rows)"],
+  "gold_case_traces": ["int_customer_orders"],
+  "gold_metric_facts": ["customer_360 (200 rows)", "weekly_business_metrics (246 rows)"],
+  "gold_actor_activity": "unavailable - no actor/agent entity in synthetic schema",
+  "gold_text_profiles": "unavailable - no free-text fields in synthetic schema (csat_score is numeric only)",
+  "row_counts": {
+    "fct_orders": 2000,
+    "fct_support_tickets": 500,
+    "dim_customers": 200,
+    "customer_360": 200,
+    "weekly_business_metrics": 246
+  },
+  "dbt_test_results": "72/72 PASS (dbt build --target local, 2026-09-18T16:16:23Z)"
+}

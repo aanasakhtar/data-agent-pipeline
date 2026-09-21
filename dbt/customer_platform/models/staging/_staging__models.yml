@@ -1,0 +1,60 @@
+version: 2
+
+models:
+  - name: stg_customers
+    description: One row per customer, lightly typed/renamed from the raw Airbyte landing table.
+    columns:
+      - name: customer_id
+        tests: [not_null, unique]
+      - name: email
+        tests: [not_null, unique]
+      - name: plan_tier
+        tests:
+          - accepted_values:
+              values: ['free', 'pro', 'enterprise']
+      - name: status
+        tests:
+          - accepted_values:
+              values: ['active', 'churned']
+
+  - name: stg_products
+    description: One row per product.
+    columns:
+      - name: product_id
+        tests: [not_null, unique]
+      - name: unit_price
+        tests: [not_null]
+
+  - name: stg_orders
+    description: One row per order.
+    columns:
+      - name: order_id
+        tests: [not_null, unique]
+      - name: customer_id
+        tests: [not_null]
+      - name: order_status
+        tests:
+          - accepted_values:
+              values: ['pending', 'completed', 'cancelled', 'refunded']
+
+  - name: stg_order_items
+    description: One row per order line item.
+    columns:
+      - name: order_item_id
+        tests: [not_null, unique]
+      - name: order_id
+        tests: [not_null]
+      - name: product_id
+        tests: [not_null]
+
+  - name: stg_support_tickets
+    description: One row per support ticket.
+    columns:
+      - name: ticket_id
+        tests: [not_null, unique]
+      - name: customer_id
+        tests: [not_null]
+      - name: ticket_status
+        tests:
+          - accepted_values:
+              values: ['open', 'in_progress', 'closed']

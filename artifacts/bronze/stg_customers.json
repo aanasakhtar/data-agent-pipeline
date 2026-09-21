@@ -1,0 +1,11 @@
+{
+  "source_id": "customer_platform_synthetic",
+  "object_id": "customers",
+  "snapshot_id": "local-2026-09-18T16:15:58Z",
+  "row_count": 200,
+  "schema_fingerprint": "customer_id int, first_name text, last_name text, email text, phone text, company text, country text, plan_tier text, status text, signup_date date, created_at timestamp, updated_at timestamp",
+  "ingested_at": "2026-09-18T16:15:58Z",
+  "source_status": "OK",
+  "quarantine_reason": null,
+  "lineage": "data-source/generator/output/customers.csv -> dbt seed raw_customers -> DuckDB main.raw_customers -> bronze.stg_customers"
+}

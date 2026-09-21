@@ -1,0 +1,13 @@
+{
+  "metric_id": "order_straight_through_rate:1",
+  "benchmark_source": "internal -- plan_tier cohort within this same synthetic dataset",
+  "cohort_definition": "plan_tier = 'pro'",
+  "cohort_count": 269,
+  "cases_per_cohort": 269,
+  "direction": "higher_is_better",
+  "statistic_used": "cohort mean (upper-tail cohort candidate: enterprise, at 93.55%, would be the target if promoted)",
+  "benchmark_value": null,
+  "stability": "not assessed -- single time window in this pilot, no trend data to test stability against",
+  "comparability": "FAILS -- plan tiers plausibly differ in support entitlements/SLAs (e.g. enterprise customers may get proactive support that prevents tickets, or the reverse), which confounds a straight numeric comparison. This wasn't measured, only reasoned about, so it cannot be ruled in or out with this dataset.",
+  "suppression_reason": "Comparability check failed: no data exists to confirm plan tiers are operationally comparable on this metric. Suppressing the enterprise cohort as a 'target' for pro tier -- reporting the segment values as descriptive only, not as a benchmark to close a gap against."
+}

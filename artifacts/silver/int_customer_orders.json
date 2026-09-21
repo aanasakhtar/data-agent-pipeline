@@ -1,0 +1,10 @@
+{
+  "entity_name": "int_customer_orders",
+  "source_objects": ["stg_orders", "stg_customers"],
+  "transformation_rules": "dbt/customer_platform/models/intermediate/int_customer_orders.sql",
+  "null_rates": {"customer_status": 0.0, "days_since_signup": 0.0},
+  "duplicate_rate": 0.0,
+  "schema_drift": "none detected",
+  "freshness": "orders span through the synthetic_data_as_of window (2026-09-08)",
+  "lineage": "stg_orders + stg_customers -> int_customer_orders"
+}

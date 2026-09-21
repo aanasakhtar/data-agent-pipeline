@@ -1,0 +1,16 @@
+{
+  "business_function": "Order Fulfillment & Support",
+  "use_case": "Determine what share of completed orders are handled straight-through (no support ticket needed) and whether that varies meaningfully by customer segment",
+  "process_scope": "Order lifecycle from order_date to completed status, and any linked support_tickets",
+  "customer_goal": ["Increase straight-through order completion (no ticket needed)"],
+  "stated_current_state": "Unknown -- not yet measured; goal was stated qualitatively by the (simulated) user",
+  "desired_target": ["Not specified -- flagged as unresolved"],
+  "time_horizon": "Full synthetic dataset window, 2022-01-01 through 2026-09-08 (var synthetic_data_as_of)",
+  "organizational_scope": "All customers, all plan tiers (free/pro/enterprise)",
+  "constraints": ["Synthetic data -- no real customer PII, this is a pipeline-testing pilot, not a real finding"],
+  "authorized_sources": ["gold.fct_orders", "gold.fct_support_tickets", "gold.dim_customers", "platinum.customer_360"],
+  "unresolved_questions": [
+    "No target % was given -- proceeding evidence-first; the measured baseline below is what a real target-setting conversation would react to",
+    "Definition of 'generates a ticket' -- treated as ANY ticket linked via support_tickets.order_id, regardless of when it was opened relative to completion. Recorded as an assumption in the MetricContract, not silently baked in."
+  ]
+}

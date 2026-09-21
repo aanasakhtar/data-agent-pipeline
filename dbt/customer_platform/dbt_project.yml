@@ -1,0 +1,41 @@
+name: 'customer_platform'
+version: '1.0.0'
+config-version: 2
+
+profile: 'customer_platform'
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+snapshot-paths: ["snapshots"]
+macro-paths: ["macros"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+vars:
+  # Latest date the synthetic data was generated as-of. Used by weekly_business_metrics
+  # instead of current_date() so results stay meaningful regardless of when dbt runs.
+  synthetic_data_as_of: '2026-09-08'
+
+models:
+  customer_platform:
+    staging:
+      +schema: bronze
+      +materialized: view
+    intermediate:
+      +schema: silver
+      +materialized: view
+    marts:
+      core:
+        +schema: gold
+        +materialized: table
+      platinum:
+        +schema: platinum
+        +materialized: table
+
+snapshots:
+  customer_platform:
+    +target_schema: silver

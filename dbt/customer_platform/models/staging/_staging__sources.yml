@@ -1,0 +1,18 @@
+version: 2
+
+sources:
+  - name: raw
+    description: >
+      Tables Airbyte lands in Snowflake from the Neon "customer source" Postgres DB.
+      Table names below are placeholders (matching schema.sql) — Airbyte's normalization
+      may rename them (lowercasing, prefixing). Finalize these once the first sync has
+      run; see docs/airbyte-runbook.md "What to hand back to Claude".
+    database: "{{ env_var('SNOWFLAKE_DATABASE', 'CUSTOMER_PLATFORM') }}"
+    schema: RAW
+    loaded_at_field: _airbyte_extracted_at
+    tables:
+      - name: customers
+      - name: products
+      - name: orders
+      - name: order_items
+      - name: support_tickets

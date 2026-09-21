@@ -1,0 +1,52 @@
+# Verified Query Repository entry.
+#
+# Borrowed directly from Snowflake Cortex Analyst's Verified Query
+# Repository format (name / question / sql / verified_at / verified_by),
+# used as trusted ground truth for evaluation and as ground truth for L10's
+# re-execution check. See docs/competitive-landscape.md.
+#
+# Cortex Analyst's own rule applies here too: SQL in this file must use the
+# LOGICAL names from registry/semantic_model.yml, not raw table names, so
+# this stays correct even if the physical warehouse (DuckDB today, maybe
+# Snowflake later) changes underneath it.
+
+verified_queries:
+  - name: order_straight_through_rate_overall
+    question: "What share of completed orders needed no support ticket?"
+    logical_query: >
+      count(Order where order_status = 'completed' and not order_has_ticket)
+      / count(Order where order_status = 'completed')
+    sql: |
+      select
+        count(distinct o.order_id) as completed_orders,
+        count(distinct o.order_id) filter (where t.order_id is null) as no_ticket_orders,
+        round(count(distinct o.order_id) filter (where t.order_id is null) * 1.0 / count(distinct o.order_id), 4) as straight_through_rate
+      from gold.fct_orders o
+      left join gold.fct_support_tickets t on o.order_id = t.order_id
+      where o.order_status = 'completed'
+    verified_at: 1789748160
+    verified_by: "L10 verification-adversarial-review, pilot run 1"
+    verified_result: {completed_orders: 965, no_ticket_orders: 873, straight_through_rate: 0.9047}
+    use_as_onboarding_question: true
+
+  - name: order_straight_through_rate_by_plan_tier
+    question: "How does straight-through rate vary by customer plan tier?"
+    logical_query: >
+      order_straight_through_rate grouped by Customer.plan_tier
+    sql: |
+      select
+        c.plan_tier,
+        count(distinct o.order_id) as completed_orders,
+        round(count(distinct o.order_id) filter (where t.order_id is null) * 1.0 / count(distinct o.order_id), 4) as straight_through_rate
+      from gold.fct_orders o
+      join gold.dim_customers c on o.customer_id = c.customer_id
+      left join gold.fct_support_tickets t on o.order_id = t.order_id
+      where o.order_status = 'completed'
+      group by 1 order by 1
+    verified_at: 1789748160
+    verified_by: "L10 verification-adversarial-review, pilot run 1"
+    verified_result:
+      - {plan_tier: enterprise, completed_orders: 93, straight_through_rate: 0.9355}
+      - {plan_tier: free, completed_orders: 603, straight_through_rate: 0.9055}
+      - {plan_tier: pro, completed_orders: 269, straight_through_rate: 0.8922}
+    use_as_onboarding_question: false

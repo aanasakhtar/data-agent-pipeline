@@ -1,0 +1,22 @@
+{
+  "verification_id": "order_straight_through_rate_v1_verify",
+  "checked_records": [
+    "MetricContract order_straight_through_rate:1",
+    "EvidenceBundle order_straight_through_rate_20260918T161600Z",
+    "DiagnosticRecord exception_concentration_plan_tier",
+    "AIOpportunityRecord order-fulfillment-ai-assessment",
+    "BenchmarkRecord plan_tier_pro_cohort"
+  ],
+  "engine_results": {
+    "semantic_check": "PASS -- EvidenceBundle.query matches MetricContract's numerator/denominator_definition exactly",
+    "query_reexecution": "PASS -- re-ran independently in a fresh DuckDB connection, result (965, 873, 0.9047) matched observed_value exactly",
+    "arithmetic_check": "PASS -- 873/965 = 0.9047, recomputed by hand from raw counts, matches",
+    "data_quality_check": "PASS -- dbt build --target local reported 72/72 tests passing at build time (2026-09-18T16:16:23Z), consistent with EvidenceBundle.data_quality_status=HIGH",
+    "benchmark_check": "PASS -- BenchmarkRecord correctly set suppression_reason and left benchmark_value null rather than presenting an unqualified target",
+    "contradiction_check": "PASS -- AIOpportunityRecord correctly reflects L7's low-confidence/hypothesis diagnosis rather than overstating it into a firm recommendation",
+    "provenance_check": "PASS -- all referenced artifact files exist under artifacts/"
+  },
+  "disposition": "PASS",
+  "retry_count": 0,
+  "notes": "First pass, no rejections needed for this pilot run. Query hash independently recomputed and matched. This is the one stage of the chain that required actually re-running a computation rather than reading an upstream artifact -- consistent with docs/claimb-idea-fit.md's flag that verification is the most work-intensive stage."
+}

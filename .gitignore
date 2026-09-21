@@ -1,0 +1,24 @@
+# Secrets / local env
+.env
+*.env.local
+
+# dbt
+dbt/customer_platform/target/
+dbt/customer_platform/dbt_packages/
+dbt/customer_platform/logs/
+dbt/customer_platform/dev.duckdb
+dbt/customer_platform/package-lock.yml
+dbt/customer_platform/.user.yml
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Synthetic data output (regeneratable, keep repo lean)
+data-source/generator/output/*.csv
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,39 @@
+# Safe to commit: every value comes from an environment variable, never a literal secret.
+# Local dev: export these (or use a .env + direnv/dotenv) before running dbt.
+# CI: set the same names as GitHub Actions Secrets (see .github/workflows/dbt_ci.yml).
+
+customer_platform:
+  target: local
+  outputs:
+    # Zero-cost local target: DuckDB is an embedded, file-based warehouse --
+    # no account, no signup, no network. Seeds (dbt/customer_platform/seeds/raw_*.csv)
+    # stand in for what Airbyte would land in Snowflake's RAW schema. Use this to
+    # test the whole bronze->silver->gold->platinum pipeline for free before ever
+    # touching Neon/Snowflake/Airbyte. See docs/local-testing.md.
+    local:
+      type: duckdb
+      path: "{{ env_var('DUCKDB_PATH', 'dev.duckdb') }}"
+      schema: main
+      threads: 4
+
+    dev:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE') }}"
+      schema: "{{ env_var('SNOWFLAKE_SCHEMA_DEV', 'DEV') }}"
+      threads: 4
+
+    ci:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE') }}"
+      schema: "{{ env_var('SNOWFLAKE_SCHEMA_CI', 'CI') }}"
+      threads: 4

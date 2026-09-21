@@ -1,0 +1,15 @@
+version: 2
+
+exposures:
+  - name: customer_platform_dashboard
+    type: dashboard
+    maturity: low
+    url: http://localhost:8501
+    description: >
+      Streamlit dashboard (dashboard/app.py) reading customer_360 and
+      weekly_business_metrics -- the platinum layer's consumer.
+    depends_on:
+      - ref('customer_360')
+      - ref('weekly_business_metrics')
+    owner:
+      name: Data Team

@@ -1,0 +1,10 @@
+{
+  "entity_name": "customers_snapshot",
+  "source_objects": ["stg_customers"],
+  "transformation_rules": "dbt/customer_platform/snapshots/customers_snapshot.sql (dbt native snapshot, check strategy, check_cols=[plan_tier, status])",
+  "null_rates": {"dbt_valid_from": 0.0},
+  "duplicate_rate": 0.0,
+  "schema_drift": "none detected",
+  "freshness": "single-run snapshot -- no historical plan_tier/status changes exist yet since this was the first dbt build against this seed",
+  "lineage": "stg_customers -> customers_snapshot"
+}

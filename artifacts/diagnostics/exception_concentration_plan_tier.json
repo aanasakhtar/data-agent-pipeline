@@ -1,0 +1,18 @@
+{
+  "diagnostic_id": "exception_concentration_plan_tier",
+  "category": "exception_concentration",
+  "observation": "Straight-through rate varies by plan_tier: enterprise 93.55% (93 completed orders), free 90.55% (603 orders), pro 89.22% (269 orders) -- pro tier has the lowest straight-through rate, roughly 4.3 percentage points below enterprise.",
+  "interpretation": "HYPOTHESIS, not measured: pro-tier customers may have different product mixes, expectations, or support thresholds than enterprise customers, causing more tickets per completed order. The synthetic data generator does not encode any tier-based behavioral difference (ticket/order linkage in generate_data.py is uniformly random with respect to plan_tier), so this specific 4.3-point gap is most likely sampling noise from random generation, not a real signal -- flagged explicitly rather than presented as a discovered business insight.",
+  "evidence_ids": ["order_straight_through_rate_20260918T161600Z"],
+  "source_queries": ["select c.plan_tier, count(distinct o.order_id), round(...) from gold.fct_orders o join gold.dim_customers c ... group by 1"],
+  "affected_process_steps": ["order fulfillment", "post-completion support"],
+  "affected_segments": ["plan_tier=pro"],
+  "severity": "low",
+  "confidence": "low",
+  "causal_status": "hypothesis",
+  "not_diagnosable_families": [
+    {"category": "handoffs", "reason": "no actor/team entity exists in the synthetic schema -- see artifacts/gold/manifest.json gold_actor_activity: unavailable"},
+    {"category": "unstructured_work_text_burden", "reason": "no free-text fields exist in the synthetic schema -- see artifacts/gold/manifest.json gold_text_profiles: unavailable"},
+    {"category": "cycle_wait_time", "reason": "only order_date/created_at/updated_at exist -- no intermediate order-stage timestamps to decompose active vs. waiting time"}
+  ]
+}

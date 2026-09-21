@@ -1,0 +1,10 @@
+{
+  "entity_name": "int_order_items_enriched",
+  "source_objects": ["stg_order_items", "stg_products"],
+  "transformation_rules": "dbt/customer_platform/models/intermediate/int_order_items_enriched.sql",
+  "null_rates": {"product_name": 0.0, "catalog_unit_price": 0.0},
+  "duplicate_rate": 0.0,
+  "schema_drift": "none detected",
+  "freshness": "n/a -- reflects order_items at time of dbt build",
+  "lineage": "stg_order_items + stg_products -> int_order_items_enriched"
+}

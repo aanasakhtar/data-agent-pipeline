@@ -1,0 +1,48 @@
+# Object / link graph -- the authoritative relationship map.
+#
+# Borrowed from Palantir AIP's Ontology: "three primitives: object types...
+# link types... action types." See docs/competitive-landscape.md.
+#
+# Rule for every skill in .claude/skills/: resolve relationships by looking
+# them up here, not by writing an ad hoc JOIN and hoping it's right. If a
+# needed relationship isn't listed here, that's a gap to fix in this file,
+# not something to invent inline in a skill.
+
+object_types:
+  - Customer
+  - Order
+  - SupportTicket
+  - Product      # defined in dbt gold.dim_products; not yet wired into
+                  # semantic_model.yml metrics -- add when a metric needs it
+  - OrderItem     # defined in dbt models.intermediate.int_order_items_enriched
+
+link_types:
+  - name: customer_has_orders
+    between: [Customer, Order]
+    via: customer_id
+    cardinality: one_to_many
+
+  - name: customer_has_tickets
+    between: [Customer, SupportTicket]
+    via: customer_id
+    cardinality: one_to_many
+
+  - name: order_has_ticket
+    between: [Order, SupportTicket]
+    via: order_id
+    cardinality: one_to_one   # nullable -- an order may have zero tickets
+    nullable: true
+
+  - name: order_has_items
+    between: [Order, OrderItem]
+    via: order_id
+    cardinality: one_to_many
+
+  - name: item_has_product
+    between: [OrderItem, Product]
+    via: product_id
+    cardinality: many_to_one
+
+# Explicitly NOT modeled (see artifacts/gold/manifest.json for why):
+# - no Actor/Agent object type -- synthetic schema has no employee/support-agent entity
+# - no Document/Text object type -- synthetic schema has no free-text fields
