@@ -40,12 +40,16 @@ explicitly out of scope here -- see maturation plan F-item on this):
 
 from __future__ import annotations
 
+import hashlib
+import subprocess
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from engine.gates import evidence_quality_gate, metric_contract_gate
 from engine.schemas import (
     AIOpportunityRecord,
     BenchmarkRecord,
@@ -54,6 +58,7 @@ from engine.schemas import (
     EvidenceBundle,
     FindingDraft,
     MetricContract,
+    RunManifest,
     VerificationResult,
     parse_versioned_metric_id,
 )
@@ -74,6 +79,58 @@ class PipelineState(str, Enum):
     FINDING_RELEASED = "FINDING_RELEASED"
 
 
+class RetryTarget(str, Enum):
+    """
+    Blueprint section 17: retry must be dependency-aware, not a blind
+    restart of the whole pipeline. Each value names which layer's
+    artifact gets invalidated (and therefore regenerated) -- everything
+    upstream of that layer is left untouched and reusable.
+    """
+
+    RETRY_METRIC_CONTRACT = "RETRY_METRIC_CONTRACT"  # L5 was wrong (semantic_check)
+    RETRY_EVIDENCE = "RETRY_EVIDENCE"                 # L6 was wrong (query/arithmetic)
+    RETRY_DIAGNOSIS = "RETRY_DIAGNOSIS"               # L7 was wrong (contradiction)
+    RETRY_AI_OPPORTUNITY = "RETRY_AI_OPPORTUNITY"     # L8 was wrong
+    RETRY_BENCHMARK = "RETRY_BENCHMARK"               # L9 was wrong
+    RETRY_VERIFICATION_ONLY = "RETRY_VERIFICATION_ONLY"  # e.g. synthesis-only issue; nothing upstream needs to change
+
+
+# Where TARGETED_RETRY routes back TO, per target -- this table plus
+# classify_retry_target() below is the entire "dependency graph" from
+# the blueprint's section 17 diagram, expressed as code instead of a
+# picture.
+_RETRY_TARGET_STATE: Dict[RetryTarget, "PipelineState"] = {}  # populated after PipelineState is fully defined below
+
+
+def classify_retry_target(result: VerificationResult) -> RetryTarget:
+    """
+    Reads which engine(s) failed inside a REJECT VerificationResult and
+    decides the MINIMAL invalidation needed -- e.g. a query-reexecution
+    or arithmetic failure means L6's EvidenceBundle was wrong, so only
+    L6 and everything downstream of it needs to be regenerated; L4/L5
+    (BusinessFunctionContext, MetricContract) remain valid and are not
+    touched. Conservative default (RETRY_EVIDENCE) when a failure can't
+    be attributed to a specific engine -- regenerating evidence is the
+    safest fallback since everything else depends on it anyway.
+    """
+    er = result.engine_results
+
+    def _failed(status: Optional[str]) -> bool:
+        return bool(status) and status.startswith("FAIL")
+
+    if _failed(er.query_reexecution) or _failed(er.arithmetic_check):
+        return RetryTarget.RETRY_EVIDENCE
+    if _failed(er.semantic_check):
+        return RetryTarget.RETRY_METRIC_CONTRACT
+    if _failed(er.contradiction_check):
+        return RetryTarget.RETRY_DIAGNOSIS
+    if _failed(er.benchmark_check):
+        return RetryTarget.RETRY_BENCHMARK
+    if _failed(er.narrative_integrity):
+        return RetryTarget.RETRY_VERIFICATION_ONLY
+    return RetryTarget.RETRY_EVIDENCE
+
+
 # Explicit allow-list of legal transitions. Anything not listed here is
 # refused by `transition()` -- this is the actual enforcement mechanism,
 # not the docstring above.
@@ -90,12 +147,32 @@ _VALID_TRANSITIONS: Dict[PipelineState, Tuple[PipelineState, ...]] = {
         PipelineState.TARGETED_RETRY,
         PipelineState.HUMAN_REVIEW,
     ),
-    PipelineState.TARGETED_RETRY: (PipelineState.VERIFICATION,),
+    # A retry can route back to ANY earlier stage, depending on which
+    # layer's artifact was invalidated -- see RetryTarget / classify_retry_target.
+    PipelineState.TARGETED_RETRY: (
+        PipelineState.INTENT_RESOLVED,
+        PipelineState.METRICS_RESOLVED,
+        PipelineState.CURRENT_STATE_MEASURED,
+        PipelineState.OPERATIONALLY_DIAGNOSED,
+        PipelineState.AI_OPPORTUNITIES_ASSESSED,
+        PipelineState.BENCHMARKED,
+    ),
     PipelineState.SYNTHESIZED: (PipelineState.FINDING_RELEASED,),
     # HUMAN_REVIEW and FINDING_RELEASED are terminal for this module.
     PipelineState.HUMAN_REVIEW: (),
     PipelineState.FINDING_RELEASED: (),
 }
+
+_RETRY_TARGET_STATE.update(
+    {
+        RetryTarget.RETRY_METRIC_CONTRACT: PipelineState.INTENT_RESOLVED,
+        RetryTarget.RETRY_EVIDENCE: PipelineState.METRICS_RESOLVED,
+        RetryTarget.RETRY_DIAGNOSIS: PipelineState.CURRENT_STATE_MEASURED,
+        RetryTarget.RETRY_AI_OPPORTUNITY: PipelineState.OPERATIONALLY_DIAGNOSED,
+        RetryTarget.RETRY_BENCHMARK: PipelineState.AI_OPPORTUNITIES_ASSESSED,
+        RetryTarget.RETRY_VERIFICATION_ONLY: PipelineState.BENCHMARKED,
+    }
+)
 
 MAX_VERIFICATION_RETRIES = 2
 
@@ -109,6 +186,21 @@ class InvalidTransitionError(Exception):
 class GateNotSatisfiedError(Exception):
     """Raised when a layer is recorded out of order, or when synthesis
     is attempted without a passing verification gate."""
+
+
+class MetricNotResolvableError(GateNotSatisfiedError):
+    """Raised when a MetricContract's resolution_status (or basic
+    well-formedness -- see engine.gates.metric_contract_gate) blocks it
+    from proceeding to evidence measurement. The contract is NOT stored
+    and state does NOT advance -- caller must supply a corrected or
+    resolved contract before retrying record_metric_contract."""
+
+
+class EvidenceNotUsableError(GateNotSatisfiedError):
+    """Raised when an EvidenceBundle fails the pre-diagnosis quality gate
+    (UNUSABLE data quality, or sample size below the contract's own
+    stated minimum). The evidence is NOT stored and state does NOT
+    advance."""
 
 
 # ---------------------------------------------------------------------------
@@ -230,6 +322,7 @@ class PipelineOrchestrator:
 
         self._transition_log: List[TransitionLogEntry] = []
         self._verification_retry_count = 0
+        self._last_retry_target: Optional[RetryTarget] = None
 
         self._business_context: Optional[BusinessFunctionContext] = None
         self._metric_contract: Optional[MetricContract] = None
@@ -270,6 +363,14 @@ class PipelineOrchestrator:
     def record_metric_contract(self, contract: MetricContract) -> None:
         if self.state != PipelineState.INTENT_RESOLVED:
             raise GateNotSatisfiedError(f"cannot record metric contract from state {self.state}")
+        gate_reason = metric_contract_gate(contract)
+        if gate_reason is not None:
+            # Deliberately does NOT store the contract or advance state --
+            # caller must supply a corrected/resolved contract and call
+            # this again from the same state.
+            raise MetricNotResolvableError(
+                f"MetricContract {contract.metric_id!r} failed the pre-evidence gate: {gate_reason}"
+            )
         self._metric_contract = contract
         self.transition(PipelineState.METRICS_RESOLVED)
 
@@ -294,6 +395,11 @@ class PipelineOrchestrator:
                 f"version {ev_version}, but the metric contract on file is version "
                 f"{self._metric_contract.version}"
             )
+        gate_reason = evidence_quality_gate(evidence, self._metric_contract)
+        if gate_reason is not None:
+            raise EvidenceNotUsableError(
+                f"EvidenceBundle {evidence.evidence_id!r} failed the pre-diagnosis gate: {gate_reason}"
+            )
         self._evidence = evidence
         self.transition(PipelineState.CURRENT_STATE_MEASURED)
 
@@ -316,17 +422,12 @@ class PipelineOrchestrator:
         self.transition(PipelineState.BENCHMARKED)
 
     def record_verification(self, result: VerificationResult) -> None:
-        if self.state not in (PipelineState.BENCHMARKED, PipelineState.TARGETED_RETRY):
+        if self.state != PipelineState.BENCHMARKED:
             raise GateNotSatisfiedError(f"cannot record verification from state {self.state}")
 
-        # BENCHMARKED -> VERIFICATION is a direct transition; a retry loop
-        # re-enters VERIFICATION from TARGETED_RETRY (see _VALID_TRANSITIONS).
-        if self.state == PipelineState.BENCHMARKED:
-            self.transition(PipelineState.VERIFICATION)
-        else:
-            self.transition(PipelineState.VERIFICATION)
-
+        self.transition(PipelineState.VERIFICATION)
         self._verification = result
+        self._last_retry_target = None
 
         if result.disposition in ("PASS", "LOW_CONFIDENCE"):
             return  # caller may now proceed to record_finding
@@ -334,7 +435,8 @@ class PipelineOrchestrator:
         if result.disposition == "REJECT":
             self._verification_retry_count += 1
             if self._verification_retry_count <= MAX_VERIFICATION_RETRIES:
-                self.transition(PipelineState.TARGETED_RETRY)
+                target = classify_retry_target(result)
+                self._invalidate_and_route(target)
             else:
                 self.transition(PipelineState.HUMAN_REVIEW)
             return
@@ -342,6 +444,45 @@ class PipelineOrchestrator:
         if result.disposition == "UNVERIFIABLE_NEEDS_HUMAN_REVIEW":
             self.transition(PipelineState.HUMAN_REVIEW)
             return
+
+    def _invalidate_and_route(self, target: RetryTarget) -> None:
+        """
+        The actual dependency-aware invalidation: clears exactly the
+        artifacts that depend on the layer identified as wrong, leaves
+        everything upstream untouched, and routes the state machine back
+        to the point where regeneration should resume. Logged as its own
+        TARGETED_RETRY transition first (so the transition log shows a
+        retry happened, and to what target) before landing on the resume
+        state.
+        """
+        self.transition(PipelineState.TARGETED_RETRY)
+        self._last_retry_target = target
+
+        if target == RetryTarget.RETRY_METRIC_CONTRACT:
+            self._metric_contract = None
+            self._evidence = None
+            self._diagnostics = ()
+            self._ai_opportunity = None
+            self._benchmark = None
+        elif target == RetryTarget.RETRY_EVIDENCE:
+            self._evidence = None
+            self._diagnostics = ()
+            self._ai_opportunity = None
+            self._benchmark = None
+        elif target == RetryTarget.RETRY_DIAGNOSIS:
+            self._diagnostics = ()
+            self._ai_opportunity = None
+            self._benchmark = None
+        elif target == RetryTarget.RETRY_AI_OPPORTUNITY:
+            self._ai_opportunity = None
+            self._benchmark = None
+        elif target == RetryTarget.RETRY_BENCHMARK:
+            self._benchmark = None
+        # RETRY_VERIFICATION_ONLY invalidates nothing upstream -- only
+        # self._verification, which record_verification already
+        # overwrote before calling this method.
+
+        self.transition(_RETRY_TARGET_STATE[target])
 
     def record_finding(self, finding: FindingDraft) -> None:
         if self.state != PipelineState.VERIFICATION:
@@ -427,8 +568,96 @@ class PipelineOrchestrator:
             "created_at": self.created_at.isoformat(),
             "state": self.state.value,
             "verification_retry_count": self._verification_retry_count,
+            "last_retry_target": self._last_retry_target.value if self._last_retry_target else None,
             "transitions": [
                 {"from": t.from_state.value, "to": t.to_state.value, "at": t.at.isoformat()}
                 for t in self._transition_log
             ],
         }
+
+    def content_fingerprint(self) -> str:
+        """
+        Hash of the run's material artifact IDs and values (not
+        timestamps or run_id). Two independently constructed
+        orchestrator runs fed the IDENTICAL fixtures should produce the
+        IDENTICAL fingerprint -- this is the testable core of
+        "reproducibility" at this layer.
+
+        Important scope limit, stated plainly: this proves the
+        deterministic parts of the pipeline (schema validation, state
+        machine, artifact linkage) are themselves deterministic. It does
+        NOT prove an LLM would generate byte-identical prose twice --
+        it wouldn't, and per the blueprint's own reproducibility
+        section, that's not actually required for reproducibility to be
+        meaningful; what must reproduce is the VERIFIED NUMBER, not the
+        sentence describing it.
+        """
+        parts = [
+            self._business_context.business_function if self._business_context else "",
+            self._metric_contract.metric_id if self._metric_contract else "",
+            str(self._metric_contract.version) if self._metric_contract else "",
+            self._evidence.evidence_id if self._evidence else "",
+            repr(self._evidence.observed_value) if self._evidence else "",
+            ",".join(sorted(d.diagnostic_id for d in self._diagnostics)),
+            self._ai_opportunity.opportunity_id if self._ai_opportunity else "",
+            self._benchmark.metric_id if self._benchmark else "",
+            self._verification.disposition if self._verification else "",
+            self._finding.finding_id if self._finding else "",
+        ]
+        canonical = "|".join(parts)
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    def build_run_manifest(
+        self,
+        *,
+        repo_root: Path = Path("."),
+        artifact_root: Optional[str] = None,
+        model_provider: Optional[str] = None,
+        model_version: Optional[str] = None,
+    ) -> RunManifest:
+        """
+        Assembles a RunManifest for this run. code_commit_sha and
+        dbt_manifest_hash are captured best-effort and left None (never
+        fabricated) when unavailable -- e.g. running outside a git
+        checkout, or before `dbt build` has produced a target/manifest.json.
+        """
+        return RunManifest(
+            run_id=self.run_id,
+            customer_id=self.customer_id,
+            business_function=self.business_function,
+            created_at=self.created_at.isoformat(),
+            source_snapshot_ids=list(self._evidence.source_snapshot_ids) if self._evidence else [],
+            code_commit_sha=_get_git_commit_sha(repo_root),
+            dbt_manifest_hash=_get_dbt_manifest_hash(repo_root),
+            model_provider=model_provider,
+            model_version=model_version,
+            configuration_hash=self.content_fingerprint(),
+            artifact_root=artifact_root,
+            status=self.state.value,
+        )
+
+
+def _get_git_commit_sha(repo_root: Path) -> Optional[str]:
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if proc.returncode == 0:
+            return proc.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return None
+
+
+def _get_dbt_manifest_hash(repo_root: Path) -> Optional[str]:
+    manifest_path = repo_root / "dbt" / "customer_platform" / "target" / "manifest.json"
+    if not manifest_path.exists():
+        return None
+    try:
+        return hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    except OSError:
+        return None

@@ -128,3 +128,47 @@ def test_query_reexecution_raises_on_missing_database(evidence):
 
     with pytest.raises(VerificationError):
         verify_query_reexecution(evidence, "/nonexistent/path/dev.duckdb")
+
+
+# ---------------------------------------------------------------------------
+# Genuine subprocess (OS-process) isolation -- the gap named in the last
+# review: opening a second DuckDB connection in the SAME process is
+# isolation of state, not isolation of process. These tests exercise the
+# real subprocess path.
+# ---------------------------------------------------------------------------
+
+
+def test_subprocess_verification_passes_on_real_data(evidence, finding, db_path, repo_root):
+    from engine.verifier import run_deterministic_verification_subprocess
+
+    result = run_deterministic_verification_subprocess(
+        verification_id="subprocess-test-pass",
+        evidence_bundle=evidence,
+        db_path=db_path,
+        finding_for_provenance=finding,
+        repo_root=repo_root,
+    )
+    assert result.disposition == "PASS"
+
+
+def test_subprocess_verification_rejects_corrupted_evidence(evidence, db_path):
+    from engine.verifier import run_deterministic_verification_subprocess
+
+    bad = evidence.model_copy(update={"observed_value": 0.5})
+    result = run_deterministic_verification_subprocess(
+        verification_id="subprocess-test-reject", evidence_bundle=bad, db_path=db_path
+    )
+    assert result.disposition == "REJECT"
+    assert "MISMATCH" in result.engine_results.query_reexecution
+
+
+def test_subprocess_raises_operational_error_on_bad_db_path(evidence, repo_root):
+    from engine.verifier import VerificationError, run_deterministic_verification_subprocess
+
+    with pytest.raises(VerificationError):
+        run_deterministic_verification_subprocess(
+            verification_id="subprocess-test-badpath",
+            evidence_bundle=evidence,
+            db_path="/nonexistent/dev.duckdb",
+            repo_root=repo_root,
+        )

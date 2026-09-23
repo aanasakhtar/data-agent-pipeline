@@ -56,6 +56,23 @@ CausalStatus = Literal["observed", "hypothesis", "supported", "unverified"]
 Severity = Literal["low", "medium", "high", "critical"]
 Disposition = Literal["PASS", "LOW_CONFIDENCE", "REJECT", "UNVERIFIABLE_NEEDS_HUMAN_REVIEW"]
 
+# From the maturation blueprint's KPI-resolution failure states (section 7).
+# NOT a retrofit onto existing data: no real MetricContract fixture carries
+# this field yet, so it defaults to "RESOLVED" -- the value every existing
+# fixture implicitly has (they all successfully produced a query template).
+# The orchestrator enforces the actual gate: a contract in any of the other
+# four states cannot proceed to L6 (see orchestrator.MetricNotResolvableError).
+ResolutionStatus = Literal[
+    "RESOLVED",
+    "RESOLVED_WITH_ASSUMPTION",
+    "AMBIGUOUS_NEEDS_INPUT",
+    "NOT_MEASURABLE",
+    "UNSUPPORTED_BY_AVAILABLE_DATA",
+]
+_UNRESOLVED_STATUSES = frozenset(
+    {"AMBIGUOUS_NEEDS_INPUT", "NOT_MEASURABLE", "UNSUPPORTED_BY_AVAILABLE_DATA"}
+)
+
 # "n/a" is included deliberately: it is the literal value the real pipeline
 # writes into autonomy_level when ai_fit == NO_AI_RECOMMENDATION. Excluding
 # it would break parsing of the one real example we have of that path.
@@ -174,6 +191,16 @@ class MetricContract(StrictArtifact):
     semantic_model_ref: Optional[str] = None
     verified_query_ref: Optional[str] = None
 
+    # Blueprint section 7. Default "RESOLVED" preserves backward
+    # compatibility with the one real fixture, which never had to
+    # represent an unresolved state. Orchestrator enforces the gate.
+    resolution_status: ResolutionStatus = "RESOLVED"
+    resolution_notes: Optional[str] = None
+
+    @property
+    def is_measurable(self) -> bool:
+        return self.resolution_status not in _UNRESOLVED_STATUSES
+
 
 # ---------------------------------------------------------------------------
 # 3. EvidenceBundle  (artifacts/evidence/*.json)
@@ -204,6 +231,21 @@ class EvidenceBundle(StrictArtifact):
     caveats: List[str] = Field(default_factory=list)
     provenance_chain: List[str] = Field(default_factory=list)
 
+    # --- Blueprint section 8 additions -----------------------------------
+    # All optional/defaulted: the one real fixture predates these fields
+    # and must keep parsing unchanged. Populated going forward by L6 (raw
+    # counts, run_id, source_snapshot_ids) and by the verifier itself
+    # (result_hash, execution_id) at the moment it independently
+    # recomputes a result -- see verifier.run_deterministic_verification,
+    # which now fills these in on the object it returns rather than
+    # mutating the input bundle.
+    numerator: Optional[float] = None
+    denominator: Optional[float] = None
+    result_hash: Optional[str] = None
+    execution_id: Optional[str] = None
+    source_snapshot_ids: List[str] = Field(default_factory=list)
+    run_id: Optional[str] = None
+
     @model_validator(mode="after")
     def _check_query_hash_integrity(self) -> "EvidenceBundle":
         expected = compute_query_hash(self.query)
@@ -215,6 +257,23 @@ class EvidenceBundle(StrictArtifact):
                 "hashing, or this bundle was tampered with. Refusing to "
                 "parse rather than silently trusting an unverifiable hash."
             )
+        return self
+
+    @model_validator(mode="after")
+    def _check_numerator_denominator_consistency(self) -> "EvidenceBundle":
+        # Only checked when BOTH are present -- most real bundles today
+        # supply neither (see numerator/denominator docstring above), and
+        # that absence is not itself an error.
+        if self.numerator is not None and self.denominator is not None:
+            if self.denominator == 0:
+                raise ValueError("denominator is 0 -- observed_value is undefined, not a rate")
+            implied = self.numerator / self.denominator
+            if abs(implied - self.observed_value) > 1e-3:
+                raise ValueError(
+                    f"numerator/denominator ({self.numerator}/{self.denominator}="
+                    f"{implied:.4f}) is inconsistent with observed_value="
+                    f"{self.observed_value} -- refusing to parse a self-contradictory bundle"
+                )
         return self
 
 
@@ -243,6 +302,17 @@ class DiagnosticRecord(StrictArtifact):
     confidence: str  # see module docstring note (1) -- deliberately not a Literal
     causal_status: CausalStatus
     not_diagnosable_families: Optional[List[NotDiagnosableFamily]] = None
+
+    # Blueprint section 9. All default to empty/None so the two real
+    # fixtures (neither of which populates these) keep parsing unchanged.
+    # counterevidence_ids is the one worth prioritizing if L7's actual
+    # prompt only gets to add one new field: it structurally forces a
+    # diagnostic module to have looked for disconfirming evidence, not
+    # just supporting evidence -- a real anti-hallucination device, not
+    # bookkeeping.
+    counterevidence_ids: List[str] = Field(default_factory=list)
+    supporting_metrics: List[str] = Field(default_factory=list)
+    recommended_next_test: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -399,3 +469,106 @@ class FindingDraft(StrictArtifact):
                 "must never be constructed, let alone released."
             )
         return v
+
+
+# ---------------------------------------------------------------------------
+# 9. ValueRecord  (blueprint section 13 -- financial value as a deterministic
+#    subsystem, NOT an LLM computation). No real fixture exists for this yet
+#    anywhere in the repo -- this is new, not a retrofit -- so it is
+#    designed against the blueprint's suggested shape and the original
+#    architecture doc's Role Roster ROI invariants (cash/capacity split
+#    must never be collapsed into one headline figure).
+# ---------------------------------------------------------------------------
+
+
+class ValueAssumptions(BaseModel):
+    """Every number here is a stated business assumption, not a measurement
+    -- keep it separate from EvidenceBundle so a value calculation is always
+    visibly downstream of, and distinguishable from, a measured fact."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    salary_source: float = Field(gt=0, description="Fully-loaded base salary, annual")
+    overhead_multiplier: float = Field(gt=0, description="e.g. 1.3 for 30% overhead")
+    headcount: int = Field(gt=0)
+    pct_time_on_function: float = Field(ge=0, le=1)
+    pct_automatable: float = Field(ge=0, le=1)
+    realization_mode: Literal["cash_only", "capacity_only", "blended"]
+    # Only meaningful when realization_mode == "blended"; ignored otherwise.
+    blended_cash_ratio: float = Field(default=0.5, ge=0, le=1)
+    # Fraction of the theoretical gap actually expected to be captured
+    # (e.g. 0.7 -- most transformations don't realize 100% of headroom).
+    realization_factor: float = Field(default=1.0, ge=0, le=1)
+
+
+class ValueRecord(StrictArtifact):
+    value_id: str
+    metric_gap_id: str  # references the MetricContract/EvidenceBundle pair this gap came from
+    assumptions: ValueAssumptions
+
+    gap_fraction: float = Field(ge=0)
+    addressable_labor_pool: float = Field(ge=0)
+    total_annual_unlock: float = Field(ge=0)
+    cash_benefit: float = Field(ge=0)
+    capacity_benefit: float = Field(ge=0)
+
+    calculation_version: str
+    calculation_hash: str
+    provenance: str
+
+    @model_validator(mode="after")
+    def _cash_plus_capacity_equals_total(self) -> "ValueRecord":
+        # Architecture doc's non-negotiable invariant, enforced structurally
+        # rather than left to whichever agent assembles the customer-facing
+        # numbers: the two must sum to the total (small float tolerance),
+        # and must always be reported separately -- see engine/value.py's
+        # module docstring for why this is never collapsed into one figure.
+        total = self.cash_benefit + self.capacity_benefit
+        if abs(total - self.total_annual_unlock) > 0.01:
+            raise ValueError(
+                f"cash_benefit ({self.cash_benefit}) + capacity_benefit "
+                f"({self.capacity_benefit}) = {total}, which does not equal "
+                f"total_annual_unlock ({self.total_annual_unlock}). This "
+                "invariant is non-negotiable -- refusing to construct an "
+                "internally inconsistent ValueRecord."
+            )
+        return self
+
+
+# ---------------------------------------------------------------------------
+# 10. RunManifest  (blueprint section 14 -- reproducibility as a product
+#     capability). New; no fixture exists for it. code_commit_sha and
+#     dbt_manifest_hash are Optional because they're only knowable at
+#     actual run time in a real environment -- populated best-effort by
+#     orchestrator.PipelineOrchestrator.build_run_manifest(), left None
+#     rather than fabricated when unavailable (e.g. not a git checkout).
+# ---------------------------------------------------------------------------
+
+
+class RunManifest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    run_id: str
+    customer_id: str
+    business_function: str
+    created_at: str  # ISO timestamp, stored as str for stable hashing/JSON round-trip
+
+    source_snapshot_ids: List[str] = Field(default_factory=list)
+    semantic_registry_version: Optional[str] = None
+    metric_registry_version: Optional[str] = None
+    framework_registry_version: Optional[str] = None
+    diagnostic_registry_version: Optional[str] = None
+    advisory_registry_version: Optional[str] = None
+
+    code_commit_sha: Optional[str] = None
+    dbt_manifest_hash: Optional[str] = None
+
+    model_provider: Optional[str] = None
+    model_version: Optional[str] = None
+    prompt_bundle_version: Optional[str] = None
+    tool_bundle_version: Optional[str] = None
+
+    configuration_hash: Optional[str] = None
+    random_seed: Optional[int] = None
+    artifact_root: Optional[str] = None
+    status: str

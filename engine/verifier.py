@@ -545,3 +545,85 @@ def run_deterministic_verification(
         retry_count=retry_count,
         notes=notes,
     )
+
+
+# ---------------------------------------------------------------------------
+# 5. Subprocess-isolated verification (real process isolation)
+# ---------------------------------------------------------------------------
+
+import json as _json
+import subprocess
+import sys as _sys
+
+
+def run_deterministic_verification_subprocess(
+    *,
+    verification_id: str,
+    evidence_bundle: EvidenceBundle,
+    db_path: str,
+    finding_for_provenance: Optional[Any] = None,
+    repo_root: Path = Path("."),
+    retry_count: int = 0,
+    python_executable: Optional[str] = None,
+    timeout_seconds: float = 30.0,
+) -> VerificationResult:
+    """
+    The genuinely process-isolated counterpart to run_deterministic_verification.
+    Same signature, same return type -- the only difference is that this
+    version runs the actual verification in a brand-new `python
+    engine/verifier_worker.py` subprocess rather than in-process. Use
+    this one in the orchestrator; the in-process version above remains
+    available for unit-testing individual engines cheaply (no subprocess
+    overhead) and is what verifier_worker.py itself calls internally.
+
+    Independence this actually buys, that the in-process version cannot:
+    the subprocess has its own interpreter, its own memory, and zero
+    access to any variable, import, or object that exists in the calling
+    process -- including whatever produced evidence_bundle in the first
+    place. Communication happens ONLY through the stdin/stdout JSON
+    contract documented in verifier_worker.py's module docstring.
+    """
+    worker_path = Path(__file__).resolve().parent / "verifier_worker.py"
+    python_executable = python_executable or _sys.executable
+
+    payload = {
+        "record_under_test": evidence_bundle.model_dump(mode="json"),
+        "source_reference": db_path,
+        "verification_policy": {
+            "finding_for_provenance": (
+                finding_for_provenance.model_dump(mode="json")
+                if finding_for_provenance is not None
+                else None
+            ),
+            "repo_root": str(repo_root),
+            "verification_id": verification_id,
+            "retry_count": retry_count,
+        },
+    }
+
+    try:
+        proc = subprocess.run(
+            [python_executable, str(worker_path)],
+            input=_json.dumps(payload),
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise VerificationError(
+            f"verifier subprocess timed out after {timeout_seconds}s: {exc}"
+        ) from exc
+
+    if proc.returncode != 0:
+        raise VerificationError(
+            f"verifier subprocess exited {proc.returncode}: {proc.stderr.strip()}"
+        )
+
+    try:
+        result_dict = _json.loads(proc.stdout)
+    except _json.JSONDecodeError as exc:
+        raise VerificationError(
+            f"verifier subprocess produced non-JSON stdout: {proc.stdout[:300]!r}"
+        ) from exc
+
+    return VerificationResult.model_validate(result_dict)

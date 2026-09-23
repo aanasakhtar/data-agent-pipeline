@@ -6,25 +6,40 @@ shape, verification independence, and state-machine gating. See
 
 ## Scope — read this before extending anything here
 
-This package implements exactly four things, and deliberately nothing more:
+This package now implements, all tested against real repo data and a
+real DuckDB warehouse:
 
 1. **`schemas.py`** — strict Pydantic v2 models for the 8 Platinum
-   artifacts, checked against every real fixture currently in `artifacts/`.
-2. **`verifier.py`** — the **deterministic third** of Layer 10: query
-   re-execution, arithmetic cross-checks, provenance resolution. No LLM.
-3. **`orchestrator.py`** — the state machine and the isolation payload
-   builders that structurally prevent a layer from seeing fields it
-   isn't supposed to.
-4. **`run_pipeline.py`** — an end-to-end harness proving 1–3 against the
-   real pilot fixtures and the real `dev.duckdb`.
+   artifacts, plus `ValueRecord`/`ValueAssumptions` (financial value) and
+   `RunManifest` (reproducibility). All backward-compatible with every
+   real fixture in `artifacts/` — new fields are optional/defaulted.
+2. **`gates.py`** — early, cheap deterministic gates on `MetricContract`
+   and `EvidenceBundle`, run BEFORE the expensive L10 pass (blueprint
+   section 5's cross-cutting verification plane).
+3. **`verifier.py`** + **`verifier_worker.py`** — the deterministic third
+   of Layer 10 (query re-execution, arithmetic, provenance), runnable
+   either in-process (cheap, for unit tests) or via a genuinely isolated
+   **OS subprocess** (`run_deterministic_verification_subprocess`) — a
+   fresh interpreter with zero access to whatever process produced the
+   evidence under test.
+4. **`orchestrator.py`** — the state machine, isolation payload builders,
+   **dependency-aware targeted retry** (a REJECT invalidates only the
+   layer that was actually wrong and everything downstream of it — L4/L5
+   survive untouched from an evidence-level failure), and `RunManifest`
+   / `content_fingerprint()` for reproducibility.
+5. **`value.py`** — the financial value subsystem flagged as missing
+   since the first review: pure, deterministic arithmetic on stated
+   assumptions (never inferred), with independent re-verification.
+6. **`run_pipeline.py`** — end-to-end harness proving all of the above
+   against the real pilot fixtures, real `dev.duckdb`, and a real
+   subprocess call.
 
-**What this does NOT do:** call an LLM for any of L4/L5/L7/L8/L9/L11's
-actual reasoning, or implement the adversarial-review half of L10
-(semantic conformance, contradiction detection, narrative integrity —
-see `verifier.py`'s module docstring for exactly where that boundary is
-and why it's a separate, harder problem). Wiring an actual agent call
-behind each `build_*_payload()` is the next piece of work, sequenced in
-the maturation plan as P1.
+**What this does NOT do, on purpose:** anything from the blueprint's
+object-centric process/event-log mining generalization (section 6) —
+deliberately deferred while this stays focused on the metrics chain. It
+also still doesn't call an LLM for L4/L5/L7/L8/L9/L11's actual reasoning,
+or implement the adversarial-review half of L10 (semantic conformance,
+contradiction detection, narrative integrity).
 
 ## Setup
 
@@ -45,20 +60,20 @@ cd ../..
 ## Run it
 
 ```bash
-# End-to-end harness against the real pilot fixtures + real DuckDB
+# End-to-end harness -- 7 steps: schema validation, in-process
+# verification, full orchestrator walk, dependency-aware retry recovery,
+# subprocess-isolated verification, an illustrative value calculation,
+# and run-manifest reproducibility.
 python engine/run_pipeline.py
 
-# Full test suite (28 tests: schema parsing, verifier PASS/REJECT/
-# LOW_CONFIDENCE paths against real + deliberately corrupted data,
-# orchestrator state machine + isolation enforcement)
+# Full test suite (57 tests)
 pytest tests/ -v
 ```
 
-Both were run against this exact repo state before being handed over —
-`run_pipeline.py` exits 0, all 28 tests pass. `tests/conftest.py` will
-`pytest.skip` the DB-dependent tests (not fail the whole suite) if you
-run `pytest` before `dbt build --target local` has produced
-`dev.duckdb`.
+Both were run against this exact repo state before being handed over --
+`run_pipeline.py` exits 0, all 57 tests pass, confirmed from a completely
+fresh clone and a brand-new venv (not just in the session that wrote the
+code).
 
 ## Things found while building this that are worth knowing about
 
@@ -109,3 +124,26 @@ today — but they're the kind of small inconsistency that gets much more
 expensive to fix once ten more metrics have been onboarded on top of the
 current convention. Worth a five-minute conversation with whoever owns
 L5/L6 before that happens.
+
+## What's still open (from the maturation blueprint), in priority order
+
+1. **The adversarial-review half of L10** (semantic conformance,
+   contradiction detection, narrative integrity) — still `NOT_RUN` by
+   design. This needs an actual model call given a fresh context
+   containing only the record under test, per `verifier.py`'s module
+   docstring. Wiring this is what turns `PASS` here into a true 7-engine
+   `PASS`, not a 3-engine one.
+2. **No LLM calls anywhere.** `build_*_payload()` on the orchestrator
+   produces exactly the narrow, isolated input each layer should
+   receive — nothing yet calls a model with it. That's P1: prove the
+   affirmative reasoning path on a planted-gap dataset with a known
+   expected finding and dollar value.
+3. **Object-centric process/event-log mining** (blueprint section 6) —
+   explicitly deferred per current direction; this package stays
+   metrics-focused.
+4. **`resolution_status` and the `ValueRecord`/`RunManifest` schemas are
+   new and unpopulated by any real fixture** — they're designed and
+   tested against synthetic cases, not yet exercised by an actual L5/L6
+   agent output. Expect some friction the first time a real one is
+   produced; treat this package's tests as the contract that output
+   needs to satisfy, not as proof the contract is exactly right yet.
