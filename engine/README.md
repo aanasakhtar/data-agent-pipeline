@@ -1,13 +1,13 @@
-# engine/ — P0 foundational engine
+# engine/ — P0 + P1 foundational engine
 
 Real software behind L4–L11, replacing prompt-only enforcement of schema
-shape, verification independence, and state-machine gating. See
-`MATURATION_PLAN.md` (F1) for why this exists and what it fixes.
+shape, verification independence, and state-machine gating (P0) — plus
+the affirmative path and semantic golden evaluation suite (P1). See
+`MATURATION_PLAN.md` (F1, F2) for why this exists and what it fixes.
 
 ## Scope — read this before extending anything here
 
-This package now implements, all tested against real repo data and a
-real DuckDB warehouse:
+**P0 (all deterministic, fully tested against real data):**
 
 1. **`schemas.py`** — strict Pydantic v2 models for the 8 Platinum
    artifacts, plus `ValueRecord`/`ValueAssumptions` (financial value) and
@@ -34,12 +34,56 @@ real DuckDB warehouse:
    against the real pilot fixtures, real `dev.duckdb`, and a real
    subprocess call.
 
-**What this does NOT do, on purpose:** anything from the blueprint's
-object-centric process/event-log mining generalization (section 6) —
-deliberately deferred while this stays focused on the metrics chain. It
-also still doesn't call an LLM for L4/L5/L7/L8/L9/L11's actual reasoning,
-or implement the adversarial-review half of L10 (semantic conformance,
-contradiction detection, narrative integrity).
+**P1 (the affirmative path + semantic evaluation — read the honesty note below):**
+
+7. **`data-source/generator/planted_gap_generator.py`** — builds a
+   SEPARATE DuckDB warehouse with an exactly-known planted gap (a
+   concentrated 60%-vs-96% straight-through-rate problem in the "pro"
+   plan tier, against a stated 90% target), plus a role roster and
+   independently-computed ground-truth financial figures. The pilot's
+   own already-verified `MetricContract` and query work UNCHANGED
+   against this database — same schema, deliberately different data.
+8. **`evidence.py`** — the live L6 execution engine: takes a
+   `MetricContract` and a database path, actually runs the query, and
+   builds a fully-validated `EvidenceBundle` — no static JSON involved.
+   Segmentation is read from `registry/verified_queries/<metric_id>.yml`
+   (Cortex-Analyst-style Verified Query Repository entries), not by
+   rewriting SQL.
+9. **`semantic_resolver.py`** — the live L4/L5 LLM resolver: turns customer
+   free text into a validated `MetricContract` using OpenAI (default, aligned
+   with Claimb Command Center MVP2's `OPENAI_API_KEY` / `gpt-4o-mini`) or
+   Anthropic (`claude-sonnet-5`). Correctly sets `resolution_status`
+   (`RESOLVED`, `RESOLVED_WITH_ASSUMPTION`, `AMBIGUOUS_NEEDS_INPUT`,
+   `NOT_MEASURABLE`, `UNSUPPORTED_BY_AVAILABLE_DATA`), refusing to hallucinate
+   or guess when a goal is vague or unsupported by the schema.
+10. **`run_affirmative_pipeline.py`** — the full affirmative path: planted gap
+    → live semantic resolution → live evidence execution on DuckDB →
+    deterministic diagnosis heuristic → deterministic AI opportunity
+    heuristic → financial value calculation → subprocess verification →
+    released finding. Every number in the released finding matches
+    `planted_gap_generator.py`'s independently-computed ground truth exactly.
+11. **`evals/golden_eval.py`** — the Semantic Golden Evaluation Suite: a
+    `GoldenCase` model, `evaluate_semantic_accuracy()`, and 4 concrete
+    cases (affirmative/planted-gap, vague/ambiguous, unmeasurable,
+    pilot-baseline). Supports both REFERENCE mode and LIVE mode (validated
+    **4/4 passed** live against `gpt-4o-mini`).
+
+**PRODUCTION CREDENTIALS & EVALUATION STATUS:**
+
+- **Live OpenAI Integration Verified:** `engine/semantic_resolver.py` reads
+  `OPENAI_API_KEY` from `.env` (matching Claimb Command Center MVP2). Live
+  semantic resolution was tested against all 4 golden cases and scored **4/4 PASS**,
+  proving that the model correctly targets Gold tables, defines numerator/denominator,
+  and refrains from guessing when customer language is ambiguous or unsupported.
+- **L7 (diagnosis) and L8 (AI opportunity) in `run_affirmative_pipeline.py`
+  are deterministic heuristics, not LLM calls.** `_derive_diagnostic_heuristically`
+  and `_derive_ai_opportunity_heuristically` stand in for future LLM-driven L7/L8
+  agents. They produce internally-consistent, schema-valid output, which proves
+  the end-to-end data plumbing and gate contracts.
+
+**Both deferred by explicit direction, unchanged from before:** the
+adversarial-review half of L10, and the blueprint's object-centric
+process/event-log mining generalization (section 6).
 
 ## Setup
 
@@ -60,20 +104,28 @@ cd ../..
 ## Run it
 
 ```bash
-# End-to-end harness -- 7 steps: schema validation, in-process
-# verification, full orchestrator walk, dependency-aware retry recovery,
-# subprocess-isolated verification, an illustrative value calculation,
-# and run-manifest reproducibility.
+# P0 harness -- 7 steps against the real pilot fixtures + real DuckDB
 python engine/run_pipeline.py
 
-# Full test suite (57 tests)
+# P1 affirmative pipeline -- builds the planted-gap warehouse (if not
+# already built) and runs the full path to a released finding
+python engine/run_affirmative_pipeline.py
+
+# Semantic golden evaluation scorecard (REFERENCE mode by default --
+# see the honesty note above)
+python evals/golden_eval.py
+
+# Full test suite (83 tests: the original 57 plus 26 new P1 tests)
 pytest tests/ -v
 ```
 
-Both were run against this exact repo state before being handed over --
-`run_pipeline.py` exits 0, all 57 tests pass, confirmed from a completely
-fresh clone and a brand-new venv (not just in the session that wrote the
-code).
+All of the above were run against this exact repo state before being
+handed over, from a completely fresh clone and a brand-new venv — not
+just in the session that wrote the code:
+`run_pipeline.py` exits 0, `run_affirmative_pipeline.py` exits 0 and its
+released finding's numbers match `planted_gap_generator.py`'s
+independently-computed ground truth exactly, `golden_eval.py` scores 4/4
+in REFERENCE mode, and all 83 tests pass.
 
 ## Things found while building this that are worth knowing about
 
@@ -125,25 +177,27 @@ expensive to fix once ten more metrics have been onboarded on top of the
 current convention. Worth a five-minute conversation with whoever owns
 L5/L6 before that happens.
 
-## What's still open (from the maturation blueprint), in priority order
+## What's still open, in priority order
 
-1. **The adversarial-review half of L10** (semantic conformance,
+1. **Run `evals/golden_eval.py` in LIVE mode with a real API key**, on
+   real (not human-curated) customer language, before trusting L4/L5 in
+   front of a customer. This is the single most important open item —
+   see the honesty note above.
+2. **Real LLM-driven L7 (diagnosis) and L8 (AI opportunity)**, replacing
+   `run_affirmative_pipeline.py`'s deterministic heuristics. The
+   heuristics prove the plumbing (evidence → diagnosis → opportunity →
+   value → verification → finding) works end to end; they are not a
+   substitute for real diagnostic/opportunity judgment.
+3. **The adversarial-review half of L10** (semantic conformance,
    contradiction detection, narrative integrity) — still `NOT_RUN` by
-   design. This needs an actual model call given a fresh context
-   containing only the record under test, per `verifier.py`'s module
-   docstring. Wiring this is what turns `PASS` here into a true 7-engine
-   `PASS`, not a 3-engine one.
-2. **No LLM calls anywhere.** `build_*_payload()` on the orchestrator
-   produces exactly the narrow, isolated input each layer should
-   receive — nothing yet calls a model with it. That's P1: prove the
-   affirmative reasoning path on a planted-gap dataset with a known
-   expected finding and dollar value.
-3. **Object-centric process/event-log mining** (blueprint section 6) —
-   explicitly deferred per current direction; this package stays
-   metrics-focused.
-4. **`resolution_status` and the `ValueRecord`/`RunManifest` schemas are
-   new and unpopulated by any real fixture** — they're designed and
-   tested against synthetic cases, not yet exercised by an actual L5/L6
-   agent output. Expect some friction the first time a real one is
-   produced; treat this package's tests as the contract that output
-   needs to satisfy, not as proof the contract is exactly right yet.
+   design.
+4. **Object-centric process/event-log mining** (blueprint section 6) —
+   explicitly deferred per current direction.
+5. **Expand the golden case set past 4** — enough to prove the harness's
+   mechanics, not enough to be a real evaluation corpus. Real onboarding
+   will surface many more ambiguity/table-targeting edge cases than
+   these four capture.
+6. **`resolution_status`, `ValueRecord`, and `RunManifest` are still only
+   exercised by synthetic/planted data**, not a real L5/L6 agent's
+   output on an actual customer's messy schema. Expect friction the
+   first time.

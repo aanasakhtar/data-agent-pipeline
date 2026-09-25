@@ -1,0 +1,51 @@
+# Verified Query Repository entry for the planted-gap demo scenario.
+#
+# Identical SQL to registry/verified_queries/order_straight_through_rate.yml
+# -- the gold-layer schema for the planted-gap warehouse
+# (data-source/generator/planted_gap_generator.py) is deliberately
+# identical in shape to the pilot's, so the same verified queries apply
+# unchanged. This file exists as its own entry, keyed to
+# planted_gap_order_straight_through_rate rather than reusing the
+# pilot's metric_id, because that's what real customer onboarding would
+# do -- a new metric_id gets its own registry entry, not a borrowed one.
+
+verified_queries:
+  - name: planted_gap_order_straight_through_rate_overall
+    question: "What share of completed orders needed no support ticket?"
+    logical_query: >
+      count(Order where order_status = 'completed' and not order_has_ticket)
+      / count(Order where order_status = 'completed')
+    sql: |
+      select
+        count(distinct o.order_id) as completed_orders,
+        count(distinct o.order_id) filter (where t.order_id is null) as no_ticket_orders,
+        round(count(distinct o.order_id) filter (where t.order_id is null) * 1.0 / count(distinct o.order_id), 4) as straight_through_rate
+      from gold.fct_orders o
+      left join gold.fct_support_tickets t on o.order_id = t.order_id
+      where o.order_status = 'completed'
+    verified_at: null
+    verified_by: "generated for the planted-gap affirmative-path demo, not a real customer verification"
+    verified_result: {completed_orders: 1100, no_ticket_orders: 948, straight_through_rate: 0.8618}
+    use_as_onboarding_question: false
+
+  - name: planted_gap_order_straight_through_rate_by_plan_tier
+    question: "How does straight-through rate vary by customer plan tier?"
+    logical_query: >
+      order_straight_through_rate grouped by Customer.plan_tier
+    sql: |
+      select
+        c.plan_tier,
+        count(distinct o.order_id) as completed_orders,
+        round(count(distinct o.order_id) filter (where t.order_id is null) * 1.0 / count(distinct o.order_id), 4) as straight_through_rate
+      from gold.fct_orders o
+      join gold.dim_customers c on o.customer_id = c.customer_id
+      left join gold.fct_support_tickets t on o.order_id = t.order_id
+      where o.order_status = 'completed'
+      group by 1 order by 1
+    verified_at: null
+    verified_by: "generated for the planted-gap affirmative-path demo, not a real customer verification"
+    verified_result:
+      - {plan_tier: enterprise, completed_orders: 150, straight_through_rate: 0.96}
+      - {plan_tier: free, completed_orders: 650, straight_through_rate: 0.96}
+      - {plan_tier: pro, completed_orders: 300, straight_through_rate: 0.6}
+    use_as_onboarding_question: false
