@@ -395,6 +395,34 @@ def print_scorecard(results: List[EvalCaseResult], mode: str) -> None:
     print(f"  {passed}/{len(results)} cases passed")
 
 
+def write_scorecard_json(results: List[EvalCaseResult], mode: str, provider: str, model: str, output_path: Path) -> None:
+    from datetime import datetime, timezone
+    data = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "mode": mode,
+        "provider": provider,
+        "model": model,
+        "total": len(results),
+        "passed": sum(1 for r in results if r.passed),
+        "failed": sum(1 for r in results if not r.passed),
+        "cases": [
+            {
+                "test_case_id": r.test_case_id,
+                "passed": r.passed,
+                "status_correct": r.status_correct,
+                "table_correct": r.table_correct,
+                "direction_correct": r.direction_correct,
+                "numerator_denominator_defined": r.numerator_denominator_defined,
+                "details": r.details,
+            }
+            for r in results
+        ],
+    }
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(data, indent=2))
+    print(f"\nScorecard written to: {output_path}")
+
+
 if __name__ == "__main__":
     import argparse
     import os
@@ -403,6 +431,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Semantic Golden Evaluation Suite")
     parser.add_argument("--live", action="store_true", help="Run in LIVE mode with real API calls")
     parser.add_argument("--reference", action="store_true", help="Run in REFERENCE mode with canned test fixtures")
+    parser.add_argument("--write-scorecard", type=str, nargs="?", const="evals/scorecard.json", help="Path to write JSON scorecard (default: evals/scorecard.json)")
     args = parser.parse_args()
 
     provider, model = get_resolver_config()
@@ -411,8 +440,14 @@ if __name__ == "__main__":
     if args.reference or (not args.live and not has_keys):
         print("Running in REFERENCE mode (canned fixtures)...\n")
         ref_results = run_golden_eval_suite(live=False)
-        print_scorecard(ref_results, mode="REFERENCE")
+        mode_str = "REFERENCE"
+        print_scorecard(ref_results, mode=mode_str)
+        if args.write_scorecard:
+            write_scorecard_json(ref_results, mode=mode_str, provider="canned", model="canned", output_path=Path(args.write_scorecard))
     else:
         print(f"Running LIVE evaluation using provider={provider} model={model}...\n")
         live_results = run_golden_eval_suite(live=True)
-        print_scorecard(live_results, mode=f"LIVE ({provider}/{model})")
+        mode_str = f"LIVE ({provider}/{model})"
+        print_scorecard(live_results, mode=mode_str)
+        if args.write_scorecard:
+            write_scorecard_json(live_results, mode=mode_str, provider=provider, model=model, output_path=Path(args.write_scorecard))

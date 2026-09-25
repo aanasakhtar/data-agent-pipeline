@@ -1,0 +1,229 @@
+{
+  "summary": {
+    "run_id": "434750b6-3fef-41ba-913e-42c4186945fb",
+    "customer_id": "planted-gap-demo",
+    "business_function": "Order Fulfillment & Support (Planted-Gap Scenario)",
+    "created_at": "2026-09-25T16:00:55.540220+00:00",
+    "state": "FINDING_RELEASED",
+    "verification_retry_count": 0,
+    "last_retry_target": null,
+    "transitions": [
+      {
+        "from": "CREATED",
+        "to": "INTENT_RESOLVED",
+        "at": "2026-09-25T16:00:55.540220+00:00"
+      },
+      {
+        "from": "INTENT_RESOLVED",
+        "to": "METRICS_RESOLVED",
+        "at": "2026-09-25T16:00:55.548070+00:00"
+      },
+      {
+        "from": "METRICS_RESOLVED",
+        "to": "CURRENT_STATE_MEASURED",
+        "at": "2026-09-25T16:00:55.647609+00:00"
+      },
+      {
+        "from": "CURRENT_STATE_MEASURED",
+        "to": "OPERATIONALLY_DIAGNOSED",
+        "at": "2026-09-25T16:00:55.647609+00:00"
+      },
+      {
+        "from": "OPERATIONALLY_DIAGNOSED",
+        "to": "AI_OPPORTUNITIES_ASSESSED",
+        "at": "2026-09-25T16:00:55.647609+00:00"
+      },
+      {
+        "from": "AI_OPPORTUNITIES_ASSESSED",
+        "to": "BENCHMARKED",
+        "at": "2026-09-25T16:00:55.647609+00:00"
+      },
+      {
+        "from": "BENCHMARKED",
+        "to": "VERIFICATION",
+        "at": "2026-09-25T16:00:56.194444+00:00"
+      },
+      {
+        "from": "VERIFICATION",
+        "to": "SYNTHESIZED",
+        "at": "2026-09-25T16:00:56.194444+00:00"
+      },
+      {
+        "from": "SYNTHESIZED",
+        "to": "FINDING_RELEASED",
+        "at": "2026-09-25T16:00:56.194444+00:00"
+      }
+    ]
+  },
+  "finding": {
+    "finding_id": "finding_planted_gap_order_straight_through_rate_20260925T160055Z",
+    "headline": "Fulfillment & Exception Handling Specialist workload: pro-tier orders driving a 3.82% straight-through-rate gap",
+    "severity": "high",
+    "verified_metrics": [
+      "planted_gap_order_straight_through_rate:1"
+    ],
+    "linked_evidence": [
+      "planted_gap_order_straight_through_rate_20260925T160055Z"
+    ],
+    "diagnosis": [
+      "segment_concentration_pro"
+    ],
+    "benchmark_context": "No cross-customer benchmark available for this scenario (suppressed, not fabricated).",
+    "ai_opportunity": "High-volume, repeatable order/ticket matching with clear structured signals (order status, ticket linkage) -- a reasonable BOUNDED_AUTOMATION candidate: automatically flag and pre-triage tickets for the affected segment before they reach a human queue.",
+    "advisory_match": "Bounded-automation ticket triage for the pro segment (autonomy_level=BOUNDED_AUTOMATION)",
+    "verification_status": "PASS",
+    "confidence": "high -- directly measured from live segment_results, not inferred",
+    "provenance_chain": [
+      "BusinessFunctionContext (Order Fulfillment & Support (Planted-Gap Scenario))",
+      "MetricContract planted_gap_order_straight_through_rate v1",
+      "EvidenceBundle planted_gap_order_straight_through_rate_20260925T160055Z",
+      "DiagnosticRecord segment_concentration_pro",
+      "AIOpportunityRecord ai_opportunity_segment_concentration_pro",
+      "ValueRecord value_planted_gap_order_straight_through_rate_20260925T160055Z",
+      "VerificationResult affirmative-planted_gap_order_straight_through_rate_20260925T160055Z"
+    ]
+  },
+  "verification": {
+    "verification_id": "affirmative-planted_gap_order_straight_through_rate_20260925T160055Z",
+    "checked_records": [
+      "planted_gap_order_straight_through_rate_20260925T160055Z"
+    ],
+    "engine_results": {
+      "semantic_check": "NOT_RUN -- deterministic engine only, requires adversarial-review pass",
+      "query_reexecution": "PASS -- recomputed straight_through_rate=0.8618 vs recorded observed_value=0.8618 (diff=0.000000, tolerance=0.0001)",
+      "arithmetic_check": "PASS -- sum(completed_orders across 3 segments)=1100 vs sample_size=1100; reconstructed overall value from segments=0.8618 (numerator~948) vs recorded observed_value=0.8618 (implied numerator~948.0), diff=0.0, tolerance=+/-3",
+      "data_quality_check": "data_quality_status=HIGH (from EvidenceBundle, not independently re-derived)",
+      "benchmark_check": "NOT_RUN -- deterministic engine only, requires adversarial-review pass",
+      "contradiction_check": "NOT_RUN -- deterministic engine only, requires adversarial-review pass",
+      "provenance_check": "PASS -- 2 reference(s) checked, 0 unresolved path failure(s)",
+      "narrative_integrity": null
+    },
+    "disposition": "PASS",
+    "retry_count": 0,
+    "notes": "Deterministic engines only. query_reexecution=True, arithmetic_check=True, provenance_check=True. semantic_check/benchmark_check/contradiction_check require the adversarial-review half of L10 and were not run by this module."
+  },
+  "evidence": {
+    "evidence_id": "planted_gap_order_straight_through_rate_20260925T160055Z",
+    "metric_contract_id": "planted_gap_order_straight_through_rate:1",
+    "observed_value": 0.8618,
+    "period": "2026",
+    "sample_size": 1100,
+    "distribution_summary": {
+      "by_plan_tier": {
+        "enterprise": 0.96,
+        "free": 0.96,
+        "pro": 0.6
+      }
+    },
+    "trend_summary": "single-period live measurement; no historical trend comparison implemented yet",
+    "segment_results": [
+      {
+        "plan_tier": "enterprise",
+        "completed_orders": 150,
+        "straight_through_rate": 0.96
+      },
+      {
+        "plan_tier": "free",
+        "completed_orders": 650,
+        "straight_through_rate": 0.96
+      },
+      {
+        "plan_tier": "pro",
+        "completed_orders": 300,
+        "straight_through_rate": 0.6
+      }
+    ],
+    "source_objects": [
+      "gold.fct_orders",
+      "gold.fct_support_tickets"
+    ],
+    "query": "select count(distinct o.order_id) as completed_orders, count(distinct o.order_id) filter (where t.order_id is null) as no_ticket_orders, round(count(distinct o.order_id) filter (where t.order_id is null) * 1.0 / count(distinct o.order_id), 4) as straight_through_rate from gold.fct_orders o left join gold.fct_support_tickets t on o.order_id = t.order_id where o.order_status = 'completed'",
+    "query_hash": "3c4c8ceb12f28cea14940e1e99aef0ceee4b45ed8817f472bb7519092884842a",
+    "execution_timestamp": "2026-09-25T16:00:55.647609+00:00",
+    "data_quality_status": "HIGH",
+    "freshness_status": "live query executed at run time -- no staleness possible by construction",
+    "source_coverage": "full scan of source_entities, no sampling",
+    "caveats": [],
+    "provenance_chain": [
+      "MetricContract planted_gap_order_straight_through_rate v1",
+      "live executable_query_template against D:\\ClaiMBRepos\\claimbai-base-pipeline\\data-source\\generator\\output\\planted_gap\\planted_gap.duckdb"
+    ],
+    "numerator": 948.0,
+    "denominator": 1100.0,
+    "result_hash": "4e5da73a9f26b9824a9b4049d5ca3ed5f019678a78b04477684a6ad883c9a03c",
+    "execution_id": "exec_20260925T160055647609Z",
+    "source_snapshot_ids": [],
+    "run_id": null
+  },
+  "metric_contract": {
+    "metric_id": "planted_gap_order_straight_through_rate",
+    "version": 1,
+    "business_process": "Order Fulfillment & Support (Planted-Gap Scenario)",
+    "metric_name": "Order Straight-Through Rate",
+    "user_goal_text": "We want our straight-through order processing rate at 90% across all plan tiers -- right now it feels like our Pro-tier orders are generating a lot more support tickets than they should, but we don't have hard numbers on it.",
+    "semantic_definition": "Share of completed orders with zero linked support tickets, over all completed orders",
+    "direction": "higher_is_better",
+    "numerator_definition": "count(distinct fct_orders.order_id) where order_status = 'completed' and order_id not in (select order_id from fct_support_tickets where order_id is not null)",
+    "denominator_definition": "count(distinct fct_orders.order_id) where order_status = 'completed'",
+    "grain": "single value over the full dataset time window; also broken out by plan_tier",
+    "unit": "percent (0.0-1.0)",
+    "time_window": "2022-01-01 to 2026-09-08",
+    "inclusion_rules": [
+      "order_status = 'completed'"
+    ],
+    "exclusion_rules": [
+      "orders with status pending/cancelled/refunded excluded from both numerator and denominator"
+    ],
+    "dimensions": [
+      "plan_tier"
+    ],
+    "target_value": 0.9,
+    "target_source": "customer stated 90% in their goal text",
+    "source_entities": [
+      "gold.fct_orders",
+      "gold.fct_support_tickets"
+    ],
+    "gold_fields": [
+      "fct_orders.order_id",
+      "fct_orders.order_status",
+      "fct_support_tickets.order_id"
+    ],
+    "executable_query_template": "select count(distinct o.order_id) as completed_orders, count(distinct o.order_id) filter (where t.order_id is null) as no_ticket_orders, round(count(distinct o.order_id) filter (where t.order_id is null) * 1.0 / count(distinct o.order_id), 4) as straight_through_rate from gold.fct_orders o left join gold.fct_support_tickets t on o.order_id = t.order_id where o.order_status = 'completed'",
+    "expected_result_shape": "single row: completed_orders (int), no_ticket_orders (int), straight_through_rate (float 0.0-1.0)",
+    "data_quality_requirements": [
+      "fct_orders.order_id not null and unique (dbt-tested, PASS)",
+      "fct_support_tickets.order_id may be null (ticket not linked to an order) -- this is expected, not a defect"
+    ],
+    "minimum_sample_guidance": "at least 50 completed orders for the rate to be reportable at HIGH confidence",
+    "framework_references": [
+      "registry/framework_registry/ap-stp-analogy.json -- AP Straight-Through-Processing analogy only, not a real external citation"
+    ],
+    "provenance": "Derived from artifacts/business_context/order-fulfillment.json",
+    "semantic_model_ref": "registry/semantic_model.yml#metrics.order_straight_through_rate",
+    "verified_query_ref": "registry/verified_queries/planted_gap_order_straight_through_rate.yml",
+    "resolution_status": "RESOLVED",
+    "resolution_notes": null
+  },
+  "value_record": {
+    "value_id": "value_planted_gap_order_straight_through_rate_20260925T160055Z",
+    "metric_gap_id": "planted_gap_order_straight_through_rate:planted_gap_order_straight_through_rate_20260925T160055Z",
+    "assumptions": {
+      "salary_source": 58000.0,
+      "overhead_multiplier": 1.25,
+      "headcount": 20,
+      "pct_time_on_function": 0.5,
+      "pct_automatable": 0.7,
+      "realization_mode": "blended",
+      "blended_cash_ratio": 0.5,
+      "realization_factor": 0.8
+    },
+    "gap_fraction": 0.0382,
+    "addressable_labor_pool": 507500.0,
+    "total_annual_unlock": 15509.2,
+    "cash_benefit": 7754.6,
+    "capacity_benefit": 7754.6,
+    "calculation_version": "value-calc-v1",
+    "calculation_hash": "4512eef82c141e05380ea881d331b159b3aaa4bc5ef225df318ea594ab43ec05",
+    "provenance": "metric_contract=planted_gap_order_straight_through_rate:1, evidence=planted_gap_order_straight_through_rate_20260925T160055Z, calculation_version=value-calc-v1"
+  }
+}

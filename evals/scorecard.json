@@ -1,0 +1,63 @@
+{
+  "timestamp": "2026-09-25T15:58:50.401198+00:00",
+  "mode": "LIVE (openai/gpt-4o-mini)",
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "total": 4,
+  "passed": 4,
+  "failed": 0,
+  "cases": [
+    {
+      "test_case_id": "affirmative_planted_gap",
+      "passed": true,
+      "status_correct": true,
+      "table_correct": true,
+      "direction_correct": true,
+      "numerator_denominator_defined": true,
+      "details": [
+        "resolution_status: produced='RESOLVED' expected='RESOLVED' -> OK",
+        "primary table 'gold.fct_orders' in source_entities=['gold.fct_orders', 'gold.fct_support_tickets'] -> OK",
+        "direction: produced='higher_is_better' expected='higher_is_better' -> OK",
+        "numerator_definition and denominator_definition both non-empty: OK"
+      ]
+    },
+    {
+      "test_case_id": "vague_ambiguous_goal",
+      "passed": true,
+      "status_correct": true,
+      "table_correct": null,
+      "direction_correct": null,
+      "numerator_denominator_defined": null,
+      "details": [
+        "resolution_status: produced='AMBIGUOUS_NEEDS_INPUT' expected='AMBIGUOUS_NEEDS_INPUT' -> OK",
+        "expected_status='AMBIGUOUS_NEEDS_INPUT' blocks measurement -- table/direction checks not applicable"
+      ]
+    },
+    {
+      "test_case_id": "unmeasurable_goal",
+      "passed": true,
+      "status_correct": true,
+      "table_correct": null,
+      "direction_correct": null,
+      "numerator_denominator_defined": null,
+      "details": [
+        "resolution_status: produced='UNSUPPORTED_BY_AVAILABLE_DATA' expected='UNSUPPORTED_BY_AVAILABLE_DATA' -> OK",
+        "expected_status='UNSUPPORTED_BY_AVAILABLE_DATA' blocks measurement -- table/direction checks not applicable"
+      ]
+    },
+    {
+      "test_case_id": "pilot_baseline",
+      "passed": true,
+      "status_correct": true,
+      "table_correct": true,
+      "direction_correct": true,
+      "numerator_denominator_defined": true,
+      "details": [
+        "resolution_status: produced='RESOLVED' expected='RESOLVED' -> OK",
+        "primary table 'gold.fct_orders' in source_entities=['gold.fct_orders', 'gold.fct_support_tickets'] -> OK",
+        "direction: produced='higher_is_better' expected='higher_is_better' -> OK",
+        "numerator_definition and denominator_definition both non-empty: OK"
+      ]
+    }
+  ]
+}
